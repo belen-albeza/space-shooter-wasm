@@ -20,8 +20,9 @@ gcc main.c -I/usr/local/include -D_THREAD_SAFE -L/usr/local/lib -lSDL2 -o main
 ### Emscripten
 
 1. Setup Emscripten as indicated in [its wiki](http://kripken.github.io/emscripten-site/docs/getting_started/downloads.html).
-2. Compile `main.c` adding the SDL2 port:
+2. Compile `src/main.c` adding the SDL2 and SDL2_image ports:
 
 ```
-emcc main.c -s USE_SDL=2 -O2 -o main.html
+cd src
+emcc main.c -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]' -o ../dist/index.html -O2 --preload-file assets
 ```
