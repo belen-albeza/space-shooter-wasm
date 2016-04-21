@@ -2,6 +2,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 
+#define MAX(a,b) ((a) > (b) ? a : b)
+#define MIN(a,b) ((a) < (b) ? a : b)
+
 typedef enum {
     FALSE = (1 == 0),
     TRUE = (!FALSE)
@@ -124,7 +127,7 @@ void play_render() {
 }
 
 // returns TRUE if the state must end
-bool play_update(const Uint8 *keyboard, unsigned int delta) {
+bool play_update(const Uint8 *keyboard, float delta) {
     if (keyboard[SDL_SCANCODE_ESCAPE]) {
         return TRUE;
     }
@@ -158,6 +161,7 @@ bool startup(char *title) {
             SCREEN_WIDTH, SCREEN_HEIGHT,
             SDL_WINDOW_SHOWN);
         g_screen = SDL_GetWindowSurface(g_window);
+        SDL_GL_SetSwapInterval(1);
         return TRUE;
     }
 }
@@ -187,7 +191,8 @@ int main (int argc, char **argv) {
             const Uint8 *keyboard = SDL_GetKeyboardState(NULL);
 
             current_timestamp = SDL_GetTicks();
-            int delta = current_timestamp - last_timestamp;
+            float delta = MIN( // clamp max. delta time to 250ms
+                (current_timestamp - last_timestamp) / 1000.0, 0.25);
 
             shall_quit = play_update(keyboard, delta);
             play_render();
