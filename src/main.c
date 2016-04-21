@@ -179,6 +179,10 @@ int main (int argc, char **argv) {
             while (SDL_PollEvent(&event) != 0) {
                 shall_quit = event.type == SDL_QUIT;
             }
+            const Uint8 *keyboard = SDL_GetKeyboardState(NULL);
+            if (keyboard[SDL_SCANCODE_ESCAPE]) {
+                shall_quit = TRUE;
+            }
 
             current_timestamp = SDL_GetTicks();
             play_update(current_timestamp - last_timestamp);
