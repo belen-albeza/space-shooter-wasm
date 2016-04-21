@@ -10,8 +10,10 @@ typedef enum {
     TRUE = (!FALSE)
 } bool;
 
-const unsigned int SCREEN_WIDTH = 550;
-const unsigned int SCREEN_HEIGHT = 600;
+const int SCREEN_WIDTH = 550;
+const int SCREEN_HEIGHT = 600;
+
+const unsigned int SHIP_SPEED = 360; // pixels/second
 
 typedef enum {
     IMG_BACKGROUND,
@@ -106,6 +108,18 @@ void spawn_ship(Ship *ship, int x, int y, SDL_Surface *image) {
     ship->sprite.alive = TRUE;
 }
 
+void update_ship(Ship *ship, const float delta, const Uint8 *keyboard) {
+    // move ship depending on keyboard
+    if (keyboard[SDL_SCANCODE_LEFT]) {
+        ship->sprite.x -= SHIP_SPEED * delta;
+    }
+    else if (keyboard[SDL_SCANCODE_RIGHT]) {
+        ship->sprite.x += SHIP_SPEED * delta;
+    }
+    // clamp x position
+    ship->sprite.x = MAX(0, MIN(ship->sprite.x, SCREEN_WIDTH));
+}
+
 
 // =============================================================================
 // PLAY STATE
@@ -118,7 +132,7 @@ void play_init() {
 }
 
 void play_create() {
-    spawn_ship(&g_ship, SCREEN_WIDTH/2, SCREEN_HEIGHT/2, g_images[IMG_SHIP]);
+    spawn_ship(&g_ship, SCREEN_WIDTH/2, 500, g_images[IMG_SHIP]);
 }
 
 void play_render() {
@@ -131,6 +145,8 @@ bool play_update(const Uint8 *keyboard, float delta) {
     if (keyboard[SDL_SCANCODE_ESCAPE]) {
         return TRUE;
     }
+
+    update_ship(&g_ship, delta, keyboard);
 
     return FALSE;
 }
