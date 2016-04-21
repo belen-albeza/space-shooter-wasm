@@ -65,6 +65,11 @@ SDL_Surface* load_image(char *filename) {
     return optimized;
 }
 
+void draw_image(SDL_Surface *image, int x, int y) {
+    SDL_Rect rect = {x, y, image->w, image->h};
+    SDL_BlitSurface(image, NULL, g_screen, &rect);
+}
+
 // =============================================================================
 // SPRITE UTILS
 // =============================================================================
@@ -77,13 +82,11 @@ void init_sprite(Sprite *sprite) {
 }
 
 void draw_sprite(Sprite *sprite) {
-    SDL_Rect rect = {
-        sprite->x - (sprite->image->w / 2),
-        sprite->y - (sprite->image->h / 2),
-        sprite->image->w,
-        sprite->image->h
-    };
-    SDL_BlitSurface(sprite->image, NULL, g_screen, &rect);
+    draw_image(
+        sprite->image,
+        sprite->x - sprite->image->w / 2,
+        sprite->y - sprite->image->h / 2
+    );
 }
 
 // =============================================================================
@@ -116,7 +119,12 @@ void play_create() {
 }
 
 void play_render() {
+    draw_image(g_images[IMG_BACKGROUND], 0, 0);
+    draw_sprite(&(g_ship.sprite));
+}
 
+void play_update(unsigned int delta) {
+    // TODO
 }
 
 void play_cleanup() {
@@ -160,12 +168,25 @@ int main (int argc, char **argv) {
         play_init();
         play_create();
 
-        SDL_BlitSurface(g_images[IMG_BACKGROUND], NULL, g_screen, NULL);
-        draw_sprite(&g_ship.sprite);
-        SDL_UpdateWindowSurface(g_window);
+        // main loop
+        bool shall_quit = FALSE;
+        SDL_Event event;
+        unsigned int last_timestamp = SDL_GetTicks();
+        unsigned int current_timestamp = last_timestamp;
 
+        while (!shall_quit) {
+            // handle input
+            while (SDL_PollEvent(&event) != 0) {
+                shall_quit = event.type == SDL_QUIT;
+            }
 
-        SDL_Delay(4000);
+            current_timestamp = SDL_GetTicks();
+            play_update(current_timestamp - last_timestamp);
+            play_render();
+            last_timestamp = current_timestamp;
+
+            SDL_UpdateWindowSurface(g_window);
+        }
 
         play_cleanup();
     }
