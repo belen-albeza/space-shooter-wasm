@@ -14,7 +14,7 @@ These are instructions for Mac OS. In other UNIX environments, it should be simi
 4. Compile `main.c` with `gcc` and the flags from `sdl2-config`. Example:
 
 ```
-gcc main.c -I/usr/local/include -D_THREAD_SAFE -L/usr/local/lib -lSDL2 -o main
+gcc main.c -I/usr/local/include -D_THREAD_SAFE -L/usr/local/lib -lSDL2 -lSDL2_Image -o main
 ```
 
 ### Emscripten
