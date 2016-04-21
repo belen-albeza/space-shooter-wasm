@@ -123,8 +123,13 @@ void play_render() {
     draw_sprite(&(g_ship.sprite));
 }
 
-void play_update(unsigned int delta) {
-    // TODO
+// returns TRUE if the state must end
+bool play_update(const Uint8 *keyboard, unsigned int delta) {
+    if (keyboard[SDL_SCANCODE_ESCAPE]) {
+        return TRUE;
+    }
+
+    return FALSE;
 }
 
 void play_cleanup() {
@@ -180,16 +185,15 @@ int main (int argc, char **argv) {
                 shall_quit = event.type == SDL_QUIT;
             }
             const Uint8 *keyboard = SDL_GetKeyboardState(NULL);
-            if (keyboard[SDL_SCANCODE_ESCAPE]) {
-                shall_quit = TRUE;
-            }
 
             current_timestamp = SDL_GetTicks();
-            play_update(current_timestamp - last_timestamp);
-            play_render();
-            last_timestamp = current_timestamp;
+            int delta = current_timestamp - last_timestamp;
 
+            shall_quit = play_update(keyboard, delta);
+            play_render();
             SDL_UpdateWindowSurface(g_window);
+
+            last_timestamp = current_timestamp;
         }
 
         play_cleanup();
