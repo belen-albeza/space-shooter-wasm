@@ -2,6 +2,10 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 
+#if __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #define MAX(a,b) ((a) > (b) ? a : b)
 #define MIN(a,b) ((a) < (b) ? a : b)
 
@@ -43,6 +47,10 @@ typedef struct ship_t {
 
 SDL_Window *g_window = NULL;
 SDL_Surface *g_screen = NULL;
+
+unsigned int g_last_timestamp = 0;
+// unsigned float g_delta = 0;
+// unsigned int g_current_timestamp = last_timestamp;
 
 SDL_Surface *g_images[MAX_IMAGE_INDEX] = {NULL};
 
@@ -141,7 +149,9 @@ void play_render() {
 }
 
 // returns TRUE if the state must end
-bool play_update(const Uint8 *keyboard, float delta) {
+bool play_update(float delta) {
+    const Uint8 *keyboard = SDL_GetKeyboardState(NULL);
+
     if (keyboard[SDL_SCANCODE_ESCAPE]) {
         return TRUE;
     }
@@ -152,6 +162,7 @@ bool play_update(const Uint8 *keyboard, float delta) {
 }
 
 void play_cleanup() {
+    printf("CLEANUP\n");
     // unload images
     for (int i = 0; i < MAX_IMAGE_INDEX; i++) {
         if (g_images[i] != NULL) {
@@ -175,10 +186,64 @@ bool startup(char *title) {
             title,
             SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
             SCREEN_WIDTH, SCREEN_HEIGHT,
-            SDL_WINDOW_SHOWN);
+            SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
         g_screen = SDL_GetWindowSurface(g_window);
         SDL_GL_SetSwapInterval(1);
         return TRUE;
+    }
+}
+
+bool tick(float delta) {
+    bool res = play_update(delta);
+    play_render();
+    SDL_UpdateWindowSurface(g_window);
+    return res;
+}
+
+void tick_web() {
+    // #if __EMSCRIPTEN__
+    // printf("EMSCRIPTEN delta is %f\n", delta);
+    // #endif
+
+    unsigned int current_timestamp = SDL_GetTicks();
+    float delta = MIN( // clamp max. delta time to 250ms
+        (current_timestamp - g_last_timestamp) / 1000.0, 0.25);
+
+    play_update(delta);
+    play_render();
+    SDL_UpdateWindowSurface(g_window);
+
+    g_last_timestamp = current_timestamp;
+}
+
+#if __EMSCRIPTEN__
+void main_web_loop() {
+    g_last_timestamp = SDL_GetTicks();
+    emscripten_set_main_loop(tick_web, -1, 1);
+    printf("Main loop set\n");
+}
+#endif
+
+void main_c_loop() {
+    // main loop
+    bool shall_quit = FALSE;
+    SDL_Event event;
+    g_last_timestamp = SDL_GetTicks();
+    unsigned int current_timestamp = g_last_timestamp;
+
+    while (!shall_quit) {
+        // handle input
+        while (SDL_PollEvent(&event) != 0) {
+            shall_quit = event.type == SDL_QUIT;
+        }
+
+        current_timestamp = SDL_GetTicks();
+        float delta = MIN( // clamp max. delta time to 250ms
+            (current_timestamp - g_last_timestamp) / 1000.0, 0.25);
+
+        shall_quit = tick(delta);
+
+        g_last_timestamp = current_timestamp;
     }
 }
 
@@ -186,43 +251,22 @@ bool startup(char *title) {
 int main (int argc, char **argv) {
     SDL_Surface *screen = NULL;
     SDL_Window *window = NULL;
-    SDL_Surface *background = NULL;
-    SDL_Surface *img_ship = NULL;
+
+    printf("HALO\n");
 
     if (startup("Space Shooter")) {
         play_init();
         play_create();
-
-        // main loop
-        bool shall_quit = FALSE;
-        SDL_Event event;
-        unsigned int last_timestamp = SDL_GetTicks();
-        unsigned int current_timestamp = last_timestamp;
-
-        while (!shall_quit) {
-            // handle input
-            while (SDL_PollEvent(&event) != 0) {
-                shall_quit = event.type == SDL_QUIT;
-            }
-            const Uint8 *keyboard = SDL_GetKeyboardState(NULL);
-
-            current_timestamp = SDL_GetTicks();
-            float delta = MIN( // clamp max. delta time to 250ms
-                (current_timestamp - last_timestamp) / 1000.0, 0.25);
-
-            shall_quit = play_update(keyboard, delta);
-            play_render();
-            SDL_UpdateWindowSurface(g_window);
-
-            last_timestamp = current_timestamp;
-        }
-
+        #if __EMSCRIPTEN__
+            main_web_loop();
+        #else
+            main_c_loop();
+        #endif
         play_cleanup();
     }
     else {
         printf("Could not initialise SDL\n");
     }
-
 
     SDL_DestroyWindow(g_window);
     SDL_Quit();
