@@ -20,9 +20,9 @@ const int SCREEN_WIDTH = 550;
 const int SCREEN_HEIGHT = 600;
 
 const unsigned int SHIP_SPEED = 360; // pixels/second
-const unsigned int MAX_BULLETS = 256; // max. amounf of simultaneous sprites
+const unsigned int MAX_BULLETS = 128; // max. amounf of simultaneous sprites
 const unsigned int BULLET_SPEED = 480 ; // pixels/second
-const unsigned int MAX_ALIENS = 256; // max. amount of simultaneous sprites
+const unsigned int MAX_ALIENS = 128; // max. amount of simultaneous sprites
 const unsigned int MAX_ALIEN_SPEED_X = 240; // pixels/second
 const unsigned int MAX_ALIEN_SPEED_Y = 480; // pixels/second
 const unsigned int MIN_ALIEN_SPEED_Y = 180; // pixels/second
@@ -177,7 +177,7 @@ void shoot_bullet(int x, int y) {
         spawn_bullet(bullet, x, y);
     }
     else {
-        fprintf(stderr, "ERROR. Could not find a free bullet sprite\n");
+        fprintf(stderr, "ERROR. Could not find a free Bullet sprite\n");
     }
 }
 
@@ -245,6 +245,24 @@ void spawn_alien(Alien *alien, int x, int y, SDL_Surface *image) {
     alien->speed_y = rand_between(MIN_ALIEN_SPEED_Y, MAX_ALIEN_SPEED_Y);
 }
 
+void generate_alien(int x, int y) {
+    Alien *alien = NULL;
+    // get a free sprite in the group
+    for (unsigned int i = 0; i < MAX_BULLETS; i++) {
+        if (!(g_aliens[i].sprite.alive)) {
+            alien = &(g_aliens[i]);
+            break;
+        }
+    }
+
+    if (alien != NULL) {
+        spawn_alien(alien, x, y, g_images[IMG_ALIEN]);
+    }
+    else {
+        fprintf(stderr, "ERROR. Could not find a free Alien sprite\n");
+    }
+}
+
 void update_alien(Alien *alien, const float delta) {
     if (!alien->sprite.alive) return;
 
@@ -259,6 +277,11 @@ void update_alien(Alien *alien, const float delta) {
     // move
     alien->sprite.x += alien->speed_x * delta;
     alien->sprite.y += alien->speed_y * delta;
+
+    // kill when out of screen
+    if (alien->sprite.y > SCREEN_HEIGHT + alien->sprite.image->h) {
+        alien->sprite.alive = FALSE;
+    }
 }
 
 // =============================================================================
@@ -308,6 +331,11 @@ bool play_update(float delta) {
     if (keyboard[SDL_SCANCODE_ESCAPE]) {
         return TRUE;
     }
+
+    // randomly spawn new aliens
+    if (rand_between(0, 100) < 10) {
+        generate_alien(rand_between(0, SCREEN_WIDTH), -50);
+    };
 
     update_ship(&g_ship, delta, keyboard);
     for (unsigned int i = 0; i < MAX_BULLETS; i++) {
