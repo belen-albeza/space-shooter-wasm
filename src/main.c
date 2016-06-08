@@ -41,6 +41,7 @@ typedef struct sprite_t {
 
 typedef struct ship_t {
     Sprite sprite;
+    bool wasSpaceDown;
 } Ship;
 
 typedef struct bullet_t {
@@ -111,33 +112,6 @@ void draw_sprite(Sprite *sprite) {
 }
 
 // =============================================================================
-// SHIP
-// =============================================================================
-
-
-void spawn_ship(Ship *ship, int x, int y, SDL_Surface *image) {
-    init_sprite(&(ship->sprite));
-
-    ship->sprite.x = x;
-    ship->sprite.y = y;
-    ship->sprite.image = image;
-    ship->sprite.alive = TRUE;
-}
-
-
-void update_ship(Ship *ship, const float delta, const Uint8 *keyboard) {
-    // move ship depending on keyboard
-    if (keyboard[SDL_SCANCODE_LEFT]) {
-        ship->sprite.x -= SHIP_SPEED * delta;
-    }
-    else if (keyboard[SDL_SCANCODE_RIGHT]) {
-        ship->sprite.x += SHIP_SPEED * delta;
-    }
-    // clamp x position
-    ship->sprite.x = MAX(0, MIN(ship->sprite.x, SCREEN_WIDTH));
-}
-
-// =============================================================================
 // BULLETS
 // =============================================================================
 
@@ -148,6 +122,24 @@ void spawn_bullet(Bullet *bullet, int x, int y) {
     bullet->sprite.y = y;
     bullet->sprite.image = g_images[IMG_BULLET];
     bullet->sprite.alive = TRUE;
+}
+
+void shoot_bullet(int x, int y) {
+    Bullet *bullet = NULL;
+    // get a free sprite in the group
+    for (unsigned int i = 0; i < MAX_BULLETS; i++) {
+        if (!(g_bullets[i].sprite.alive)) {
+            bullet = &(g_bullets[i]);
+            break;
+        }
+    }
+
+    if (bullet != NULL) {
+        spawn_bullet(bullet, x, y);
+    }
+    else {
+        fprintf(stderr, "ERROR. Could not find a free bullet sprite\n");
+    }
 }
 
 void update_bullet(Bullet *bullet, const float delta) {
@@ -161,6 +153,41 @@ void update_bullet(Bullet *bullet, const float delta) {
         bullet->sprite.alive = FALSE;
     }
 }
+
+// =============================================================================
+// SHIP
+// =============================================================================
+
+void spawn_ship(Ship *ship, int x, int y, SDL_Surface *image) {
+    init_sprite(&(ship->sprite));
+
+    ship->sprite.x = x;
+    ship->sprite.y = y;
+    ship->sprite.image = image;
+    ship->sprite.alive = TRUE;
+
+    ship->wasSpaceDown = FALSE;
+}
+
+void update_ship(Ship *ship, const float delta, const Uint8 *keyboard) {
+    // move ship depending on keyboard
+    if (keyboard[SDL_SCANCODE_LEFT]) {
+        ship->sprite.x -= SHIP_SPEED * delta;
+    }
+    else if (keyboard[SDL_SCANCODE_RIGHT]) {
+        ship->sprite.x += SHIP_SPEED * delta;
+    }
+    // clamp x position
+    ship->sprite.x = MAX(0, MIN(ship->sprite.x, SCREEN_WIDTH));
+
+    // shoot
+    if (!ship->wasSpaceDown && keyboard[SDL_SCANCODE_SPACE]) {
+        shoot_bullet(ship->sprite.x, ship->sprite.y);
+    }
+
+    ship->wasSpaceDown = keyboard[SDL_SCANCODE_SPACE];
+}
+
 
 // =============================================================================
 // PLAY STATE
@@ -185,10 +212,12 @@ void play_create() {
 
 void play_render() {
     draw_image(g_images[IMG_BACKGROUND], 0, 0);
-    draw_sprite(&(g_ship.sprite));
+    // bullets
     for (unsigned int i = 0; i < MAX_BULLETS; i++) {
         draw_sprite(&(g_bullets[i].sprite));
     }
+    // ship
+    draw_sprite(&(g_ship.sprite));
 }
 
 // returns TRUE if the state must end
