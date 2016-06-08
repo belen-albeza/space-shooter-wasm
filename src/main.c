@@ -18,10 +18,13 @@ const int SCREEN_WIDTH = 550;
 const int SCREEN_HEIGHT = 600;
 
 const unsigned int SHIP_SPEED = 360; // pixels/second
+const unsigned int MAX_BULLETS = 256; // max. amounf of simultaneous sprites
+const unsigned int BULLET_SPEED = 480 ; // pixels/second
 
 typedef enum {
     IMG_BACKGROUND,
     IMG_SHIP,
+    IMG_BULLET,
     MAX_IMAGE_INDEX
 } ImageIndex;
 
@@ -40,6 +43,10 @@ typedef struct ship_t {
     Sprite sprite;
 } Ship;
 
+typedef struct bullet_t {
+    Sprite sprite;
+} Bullet;
+
 
 // =============================================================================
 // GLOBALS
@@ -49,12 +56,11 @@ SDL_Window *g_window = NULL;
 SDL_Surface *g_screen = NULL;
 
 unsigned int g_last_timestamp = 0;
-// unsigned float g_delta = 0;
-// unsigned int g_current_timestamp = last_timestamp;
 
 SDL_Surface *g_images[MAX_IMAGE_INDEX] = {NULL};
 
 Ship g_ship;
+Bullet g_bullets[MAX_BULLETS];
 
 // =============================================================================
 // UTILS
@@ -95,6 +101,8 @@ void init_sprite(Sprite *sprite) {
 }
 
 void draw_sprite(Sprite *sprite) {
+    if (sprite->image == NULL || !sprite->alive) return;
+
     draw_image(
         sprite->image,
         sprite->x - sprite->image->w / 2,
@@ -116,6 +124,7 @@ void spawn_ship(Ship *ship, int x, int y, SDL_Surface *image) {
     ship->sprite.alive = TRUE;
 }
 
+
 void update_ship(Ship *ship, const float delta, const Uint8 *keyboard) {
     // move ship depending on keyboard
     if (keyboard[SDL_SCANCODE_LEFT]) {
@@ -128,6 +137,30 @@ void update_ship(Ship *ship, const float delta, const Uint8 *keyboard) {
     ship->sprite.x = MAX(0, MIN(ship->sprite.x, SCREEN_WIDTH));
 }
 
+// =============================================================================
+// BULLETS
+// =============================================================================
+
+void spawn_bullet(Bullet *bullet, int x, int y) {
+    init_sprite(&(bullet->sprite));
+
+    bullet->sprite.x = x;
+    bullet->sprite.y = y;
+    bullet->sprite.image = g_images[IMG_BULLET];
+    bullet->sprite.alive = TRUE;
+}
+
+void update_bullet(Bullet *bullet, const float delta) {
+    if (!bullet->sprite.alive) return;
+
+    // move upwards
+    bullet->sprite.y -= BULLET_SPEED * delta;
+
+    // kill sprite if gone off screen
+    if (bullet->sprite.y < -bullet->sprite.image->h) {
+        bullet->sprite.alive = FALSE;
+    }
+}
 
 // =============================================================================
 // PLAY STATE
@@ -137,15 +170,25 @@ void play_init() {
     // load assets
     g_images[IMG_BACKGROUND] = load_image("assets/images/background.png");
     g_images[IMG_SHIP] = load_image("assets/images/captain.png");
+    g_images[IMG_BULLET] = load_image("assets/images/laser.png");
+
+    // init sprite lists
+    for (unsigned int i = 0; i < MAX_BULLETS; i++) {
+        init_sprite(&(g_bullets[i].sprite));
+    }
 }
 
 void play_create() {
     spawn_ship(&g_ship, SCREEN_WIDTH/2, 500, g_images[IMG_SHIP]);
+    spawn_bullet(&(g_bullets[0]), g_ship.sprite.x, g_ship.sprite.y);
 }
 
 void play_render() {
     draw_image(g_images[IMG_BACKGROUND], 0, 0);
     draw_sprite(&(g_ship.sprite));
+    for (unsigned int i = 0; i < MAX_BULLETS; i++) {
+        draw_sprite(&(g_bullets[i].sprite));
+    }
 }
 
 // returns TRUE if the state must end
@@ -157,12 +200,14 @@ bool play_update(float delta) {
     }
 
     update_ship(&g_ship, delta, keyboard);
+    for (unsigned int i = 0; i < MAX_BULLETS; i++) {
+        update_bullet(&(g_bullets[i]), delta);
+    }
 
     return FALSE;
 }
 
 void play_cleanup() {
-    printf("CLEANUP\n");
     // unload images
     for (int i = 0; i < MAX_IMAGE_INDEX; i++) {
         if (g_images[i] != NULL) {
@@ -193,43 +238,33 @@ bool startup(char *title) {
     }
 }
 
-bool tick(float delta) {
-    bool res = play_update(delta);
-    play_render();
-    SDL_UpdateWindowSurface(g_window);
-    return res;
-}
-
-void tick_web() {
-    // #if __EMSCRIPTEN__
-    // printf("EMSCRIPTEN delta is %f\n", delta);
-    // #endif
-
+#if __EMSCRIPTEN__
+void tick() {
+#else
+bool tick() {
+#endif
     unsigned int current_timestamp = SDL_GetTicks();
     float delta = MIN( // clamp max. delta time to 250ms
         (current_timestamp - g_last_timestamp) / 1000.0, 0.25);
 
-    play_update(delta);
+    bool res = play_update(delta);
     play_render();
     SDL_UpdateWindowSurface(g_window);
 
     g_last_timestamp = current_timestamp;
+
+    #if !__EMSCRIPTEN__
+    return res;
+    #endif
 }
 
-#if __EMSCRIPTEN__
-void main_web_loop() {
+void main_loop() {
     g_last_timestamp = SDL_GetTicks();
-    emscripten_set_main_loop(tick_web, -1, 1);
-    printf("Main loop set\n");
-}
-#endif
-
-void main_c_loop() {
-    // main loop
+#if __EMSCRIPTEN__
+    emscripten_set_main_loop(tick, -1, 1);
+#else
     bool shall_quit = FALSE;
     SDL_Event event;
-    g_last_timestamp = SDL_GetTicks();
-    unsigned int current_timestamp = g_last_timestamp;
 
     while (!shall_quit) {
         // handle input
@@ -237,31 +272,19 @@ void main_c_loop() {
             shall_quit = event.type == SDL_QUIT;
         }
 
-        current_timestamp = SDL_GetTicks();
-        float delta = MIN( // clamp max. delta time to 250ms
-            (current_timestamp - g_last_timestamp) / 1000.0, 0.25);
-
-        shall_quit = tick(delta);
-
-        g_last_timestamp = current_timestamp;
+        shall_quit = tick();
     }
+#endif
 }
-
 
 int main (int argc, char **argv) {
     SDL_Surface *screen = NULL;
     SDL_Window *window = NULL;
 
-    printf("HALO\n");
-
     if (startup("Space Shooter")) {
         play_init();
         play_create();
-        #if __EMSCRIPTEN__
-            main_web_loop();
-        #else
-            main_c_loop();
-        #endif
+        main_loop();
         play_cleanup();
     }
     else {
