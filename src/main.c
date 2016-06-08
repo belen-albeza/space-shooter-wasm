@@ -20,11 +20,17 @@ const int SCREEN_HEIGHT = 600;
 const unsigned int SHIP_SPEED = 360; // pixels/second
 const unsigned int MAX_BULLETS = 256; // max. amounf of simultaneous sprites
 const unsigned int BULLET_SPEED = 480 ; // pixels/second
+const unsigned int MAX_ALIENS = 256; // max. amount of simultaneous sprites
+const unsigned int MAX_ALIEN_SPEED_X = 240; // pixels/second
+const unsigned int MAX_ALIEN_SPEED_Y = 480; // pixels/second
+const unsigned int MIN_ALIEN_SPEED_Y = 180; // pixels/second
+const unsigned int ALIEN_ANIM_HZ = 3; // times/second
 
 typedef enum {
     IMG_BACKGROUND,
     IMG_SHIP,
     IMG_BULLET,
+    IMG_ALIEN,
     MAX_IMAGE_INDEX
 } ImageIndex;
 
@@ -37,6 +43,8 @@ typedef struct sprite_t {
     int y;
     bool alive;
     SDL_Surface *image;
+    int n_frames;
+    int frame_index;
 } Sprite;
 
 typedef struct ship_t {
@@ -47,6 +55,11 @@ typedef struct ship_t {
 typedef struct bullet_t {
     Sprite sprite;
 } Bullet;
+
+typedef struct alien_t {
+    Sprite sprite;
+    float timestamp;
+} Alien;
 
 
 // =============================================================================
@@ -62,6 +75,7 @@ SDL_Surface *g_images[MAX_IMAGE_INDEX] = {NULL};
 
 Ship g_ship;
 Bullet g_bullets[MAX_BULLETS];
+Alien g_aliens[MAX_ALIENS];
 
 // =============================================================================
 // UTILS
@@ -90,6 +104,14 @@ void draw_image(SDL_Surface *image, int x, int y) {
     SDL_BlitSurface(image, NULL, g_screen, &rect);
 }
 
+void draw_image_frame(SDL_Surface *image, int x, int y, int n_frames, int i) {
+    // assume spritesheets are horizontal strips only
+    int frame_w = image->w / n_frames;
+    SDL_Rect screen_rect = {x, y, frame_w, image->h};
+    SDL_Rect image_rect = {i * frame_w, 0, frame_w, image->h};
+    SDL_BlitSurface(image, &image_rect, g_screen, &screen_rect);
+}
+
 // =============================================================================
 // SPRITE UTILS
 // =============================================================================
@@ -99,16 +121,24 @@ void init_sprite(Sprite *sprite) {
     sprite->y = 0;
     sprite->image = NULL;
     sprite->alive = FALSE;
+    sprite->n_frames = 1;
+    sprite->frame_index = 0;
 }
 
 void draw_sprite(Sprite *sprite) {
     if (sprite->image == NULL || !sprite->alive) return;
 
-    draw_image(
-        sprite->image,
-        sprite->x - sprite->image->w / 2,
-        sprite->y - sprite->image->h / 2
-    );
+    int x = sprite->x - sprite->image->w / 2;
+    int y = sprite->y - sprite->image->h / 2;
+
+    if (sprite->n_frames > 1) {
+        draw_image_frame(
+            sprite->image, x, y,
+            sprite->n_frames, sprite->frame_index);
+    }
+    else {
+        draw_image(sprite->image, x, y);
+    }
 }
 
 // =============================================================================
@@ -188,6 +218,31 @@ void update_ship(Ship *ship, const float delta, const Uint8 *keyboard) {
     ship->wasSpaceDown = keyboard[SDL_SCANCODE_SPACE];
 }
 
+// =============================================================================
+// ALIENS
+// =============================================================================
+
+void spawn_alien(Alien *alien, int x, int y, SDL_Surface *image) {
+    init_sprite(&(alien->sprite));
+
+    alien->sprite.x = x;
+    alien->sprite.y = y;
+    alien->sprite.image = image;
+    alien->sprite.alive = TRUE;
+    alien->sprite.n_frames = 2;
+
+    alien->timestamp = 0;
+}
+
+void update_alien(Alien *alien, const float delta) {
+    if (!alien->sprite.alive) return;
+
+    alien->timestamp += delta;
+    if (alien->timestamp >= 1.0 / ALIEN_ANIM_HZ) {
+        alien->sprite.frame_index = (alien->sprite.frame_index + 1) % alien->sprite.n_frames;
+        alien->timestamp -= 1.0 / ALIEN_ANIM_HZ;
+    }
+}
 
 // =============================================================================
 // PLAY STATE
@@ -198,23 +253,32 @@ void play_init() {
     g_images[IMG_BACKGROUND] = load_image("assets/images/background.png");
     g_images[IMG_SHIP] = load_image("assets/images/captain.png");
     g_images[IMG_BULLET] = load_image("assets/images/laser.png");
+    g_images[IMG_ALIEN] = load_image("assets/images/alien.png");
 
     // init sprite lists
     for (unsigned int i = 0; i < MAX_BULLETS; i++) {
         init_sprite(&(g_bullets[i].sprite));
     }
+    for (unsigned int i = 0; i < MAX_ALIENS; i++) {
+        init_sprite(&(g_aliens[i].sprite));
+    }
 }
 
 void play_create() {
     spawn_ship(&g_ship, SCREEN_WIDTH/2, 500, g_images[IMG_SHIP]);
-    spawn_bullet(&(g_bullets[0]), g_ship.sprite.x, g_ship.sprite.y);
+    spawn_alien(&(g_aliens[0]), 100, 100, g_images[IMG_ALIEN]);
 }
 
 void play_render() {
+    // background
     draw_image(g_images[IMG_BACKGROUND], 0, 0);
     // bullets
     for (unsigned int i = 0; i < MAX_BULLETS; i++) {
         draw_sprite(&(g_bullets[i].sprite));
+    }
+    // aliens
+    for (unsigned int i = 0; i < MAX_ALIENS; i++) {
+        draw_sprite(&(g_aliens[i].sprite));
     }
     // ship
     draw_sprite(&(g_ship.sprite));
@@ -231,6 +295,9 @@ bool play_update(float delta) {
     update_ship(&g_ship, delta, keyboard);
     for (unsigned int i = 0; i < MAX_BULLETS; i++) {
         update_bullet(&(g_bullets[i]), delta);
+    }
+    for (unsigned int i = 0; i < MAX_ALIENS; i++) {
+        update_alien(&(g_aliens[i]), delta);
     }
 
     return FALSE;
