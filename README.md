@@ -33,9 +33,19 @@ git clone -b esr38 --single-branch --depth 1 https://github.com/mozilla/gecko-de
 
 1. Setup Emscripten as indicated in [its wiki](http://kripken.github.io/emscripten-site/docs/getting_started/downloads.html).
 
-2. Compile `src/main.c` adding the SDL2 and SDL2_image ports:
+2. Compile `src/main.c` adding the `SDL2` and `SDL2_image` ports. You can either target asm.js or WebAssembly.
+
+
+For WebAssembly you need to add the `BINARYEN` flag and specify how you will be generating WebAssembly (here we will be using SpiderMonkey).
 
 ```
 cd src
 emcc main.c -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]' -s BINARYEN=1 -s 'BINARYEN_SCRIPTS="spidermonkify.py"' -o ../dist/index.html -O2 --preload-file assets
 ```
+
+For asm.js: you don't need the `BINARYEN` flag:
+
+```
+emcc main.c -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]' -o ../dist/index.html -O2 --preload-file assets
+```
+
