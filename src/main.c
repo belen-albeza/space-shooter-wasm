@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 
@@ -59,6 +61,8 @@ typedef struct bullet_t {
 typedef struct alien_t {
     Sprite sprite;
     float timestamp;
+    int speed_x;
+    int speed_y;
 } Alien;
 
 
@@ -80,6 +84,11 @@ Alien g_aliens[MAX_ALIENS];
 // =============================================================================
 // UTILS
 // =============================================================================
+
+int rand_between(int min, int max) {
+    // NOTE: this is not a good random generator, but for this game it's enough
+    return (rand() % (max + 1 - min)) + min;
+}
 
 SDL_Surface* load_image(char *filename) {
     SDL_Surface *optimized = NULL;
@@ -232,16 +241,24 @@ void spawn_alien(Alien *alien, int x, int y, SDL_Surface *image) {
     alien->sprite.n_frames = 2;
 
     alien->timestamp = 0;
+    alien->speed_x = rand_between(-MAX_ALIEN_SPEED_X, MAX_ALIEN_SPEED_X);
+    alien->speed_y = rand_between(MIN_ALIEN_SPEED_Y, MAX_ALIEN_SPEED_Y);
 }
 
 void update_alien(Alien *alien, const float delta) {
     if (!alien->sprite.alive) return;
 
+    // animate
     alien->timestamp += delta;
     if (alien->timestamp >= 1.0 / ALIEN_ANIM_HZ) {
-        alien->sprite.frame_index = (alien->sprite.frame_index + 1) % alien->sprite.n_frames;
+        alien->sprite.frame_index =
+            (alien->sprite.frame_index + 1) % alien->sprite.n_frames;
         alien->timestamp -= 1.0 / ALIEN_ANIM_HZ;
     }
+
+    // move
+    alien->sprite.x += alien->speed_x * delta;
+    alien->sprite.y += alien->speed_y * delta;
 }
 
 // =============================================================================
@@ -374,6 +391,8 @@ void main_loop() {
 }
 
 int main (int argc, char **argv) {
+    srand(time(NULL));
+
     SDL_Surface *screen = NULL;
     SDL_Window *window = NULL;
 
