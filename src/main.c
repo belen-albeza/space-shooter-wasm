@@ -22,17 +22,22 @@ const int SCREEN_HEIGHT = 600;
 const unsigned int SHIP_SPEED = 360; // pixels/second
 const unsigned int MAX_BULLETS = 128; // max. amounf of simultaneous sprites
 const unsigned int BULLET_SPEED = 480 ; // pixels/second
+
 const unsigned int MAX_ALIENS = 128; // max. amount of simultaneous sprites
 const unsigned int MAX_ALIEN_SPEED_X = 240; // pixels/second
 const unsigned int MAX_ALIEN_SPEED_Y = 480; // pixels/second
 const unsigned int MIN_ALIEN_SPEED_Y = 180; // pixels/second
 const unsigned int ALIEN_ANIM_HZ = 3; // times/second
 
+const unsigned int MAX_EXPLOSIONS = 128; // max. amount of simultaneous sprites
+const float EXPLOSION_LIFESPAN = 1.0;
+
 typedef enum {
     IMG_BACKGROUND,
     IMG_SHIP,
     IMG_BULLET,
     IMG_ALIEN,
+    IMG_EXPLOSION,
     MAX_IMAGE_INDEX
 } ImageIndex;
 
@@ -65,6 +70,12 @@ typedef struct alien_t {
     int speed_y;
 } Alien;
 
+typedef struct explosion_t {
+    Sprite sprite;
+    float lifespan;
+    float timestamp;
+} Explosion;
+
 
 // =============================================================================
 // GLOBALS
@@ -80,6 +91,7 @@ SDL_Surface *g_images[MAX_IMAGE_INDEX] = {NULL};
 Ship g_ship;
 Bullet g_bullets[MAX_BULLETS];
 Alien g_aliens[MAX_ALIENS];
+Explosion g_explosions[MAX_EXPLOSIONS];
 
 // =============================================================================
 // UTILS
@@ -303,6 +315,53 @@ void update_alien(Alien *alien, const float delta) {
     }
 }
 
+// =============================================================================
+// EXPLOSIONS
+// =============================================================================
+
+void spawn_explosion(Explosion *explosion, int x, int y, SDL_Surface *image) {
+    init_sprite(&(explosion->sprite));
+
+    explosion->sprite.x = x;
+    explosion->sprite.y = y;
+    explosion->sprite.image = image;
+    explosion->sprite.alive = TRUE;
+    explosion->sprite.n_frames = 12;
+
+    explosion->timestamp = 0;
+    explosion->lifespan = 0;
+}
+
+void update_explosion(Explosion *explosion, const float delta) {
+    if (!explosion->sprite.alive) return;
+
+    // animate
+    explosion->timestamp += delta;
+    if (explosion->timestamp >= EXPLOSION_LIFESPAN/explosion->sprite.n_frames) {
+        explosion->sprite.frame_index += 1;
+        if (explosion->sprite.frame_index >= explosion->sprite.n_frames) {
+            explosion->sprite.alive = FALSE;
+        }
+    }
+}
+
+void explode(int x, int y) {
+    Explosion *explosion = NULL;
+    // get a free sprite in the group
+    for (unsigned int i = 0; i < MAX_EXPLOSIONS; i++) {
+        if (!(g_explosions[i].sprite.alive)) {
+            explosion = &(g_explosions[i]);
+            break;
+        }
+    }
+
+    if (explosion != NULL) {
+        spawn_explosion(explosion, x, y, g_images[IMG_EXPLOSION]);
+    }
+    else {
+        fprintf(stderr, "ERROR. Could not find a free Explosion sprite\n");
+    }
+}
 
 // =============================================================================
 // COLLISIONS
@@ -322,7 +381,9 @@ void collide_bullets_vs_aliens() {
             if (!alien->sprite.alive) continue;
 
             if (sprite_intersect(&(bullet->sprite), &(alien->sprite))) {
+                explode(alien->sprite.x, alien->sprite.y);
                 alien->sprite.alive = FALSE;
+                bullet->sprite.alive = FALSE;
             }
         }
     }
@@ -338,6 +399,7 @@ void play_init() {
     g_images[IMG_SHIP] = load_image("assets/images/captain.png");
     g_images[IMG_BULLET] = load_image("assets/images/laser.png");
     g_images[IMG_ALIEN] = load_image("assets/images/alien.png");
+    g_images[IMG_EXPLOSION] = load_image("assets/images/explosion.png");
 
     // init sprite lists
     for (unsigned int i = 0; i < MAX_BULLETS; i++) {
@@ -364,6 +426,10 @@ void play_render() {
     for (unsigned int i = 0; i < MAX_ALIENS; i++) {
         draw_sprite(&(g_aliens[i].sprite));
     }
+    // explosions
+    for (unsigned int i = 0; i < MAX_EXPLOSIONS; i++) {
+        draw_sprite(&(g_explosions[i].sprite));
+    }
     // ship
     draw_sprite(&(g_ship.sprite));
 }
@@ -387,6 +453,9 @@ bool play_update(float delta) {
     }
     for (unsigned int i = 0; i < MAX_ALIENS; i++) {
         update_alien(&(g_aliens[i]), delta);
+    }
+    for (unsigned int i = 0; i < MAX_EXPLOSIONS; i++) {
+        update_explosion(&(g_explosions[i]), delta);
     }
 
     collide_bullets_vs_aliens();
