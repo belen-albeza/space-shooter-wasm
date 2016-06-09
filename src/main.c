@@ -124,6 +124,7 @@ void draw_image_frame(SDL_Surface *image, int x, int y, int n_frames, int i) {
 // =============================================================================
 // SPRITE UTILS
 // =============================================================================
+#define S_WIDTH(s) ((s->n_frames > 1) ? s->image->w/s->n_frames : s->image->w)
 
 void init_sprite(Sprite *sprite) {
     sprite->x = 0;
@@ -137,7 +138,7 @@ void init_sprite(Sprite *sprite) {
 void draw_sprite(Sprite *sprite) {
     if (sprite->image == NULL || !sprite->alive) return;
 
-    int x = sprite->x - sprite->image->w / 2;
+    int x = sprite->x - S_WIDTH(sprite) / 2;
     int y = sprite->y - sprite->image->h / 2;
 
     if (sprite->n_frames > 1) {
@@ -148,6 +149,24 @@ void draw_sprite(Sprite *sprite) {
     else {
         draw_image(sprite->image, x, y);
     }
+}
+
+
+bool sprite_intersect(Sprite *a, Sprite *b) {
+    int a_width = S_WIDTH(a);
+    int a_min_x = a->x - a_width / 2;
+    int a_max_x = a->x + a_width / 2;
+    int a_min_y = a->y - a->image->h / 2;
+    int a_max_y = a->y + a->image->h / 2;
+
+    int b_width = S_WIDTH(b);
+    int b_min_x = b->x - b_width / 2;
+    int b_max_x = b->x + b_width / 2;
+    int b_min_y = b->y - b->image->h / 2;
+    int b_max_y = b->y + b->image->h / 2;
+
+    return (a_min_x <= b_max_x && a_max_x >= b_min_x) &&
+           (a_min_y <= b_max_y && a_max_y >= b_min_y);
 }
 
 // =============================================================================
@@ -284,6 +303,31 @@ void update_alien(Alien *alien, const float delta) {
     }
 }
 
+
+// =============================================================================
+// COLLISIONS
+// =============================================================================
+
+void collide_bullets_vs_aliens() {
+    Alien *alien = NULL;
+    Bullet *bullet = NULL;
+
+    for (int i = 0; i < MAX_BULLETS; i++) {
+        // check for alive
+        bullet = &(g_bullets[i]);
+        if (!bullet->sprite.alive) continue;
+
+        for (int j = 0; j < MAX_ALIENS; j++) {
+            alien = &(g_aliens[j]);
+            if (!alien->sprite.alive) continue;
+
+            if (sprite_intersect(&(bullet->sprite), &(alien->sprite))) {
+                alien->sprite.alive = FALSE;
+            }
+        }
+    }
+}
+
 // =============================================================================
 // PLAY STATE
 // =============================================================================
@@ -344,6 +388,8 @@ bool play_update(float delta) {
     for (unsigned int i = 0; i < MAX_ALIENS; i++) {
         update_alien(&(g_aliens[i]), delta);
     }
+
+    collide_bullets_vs_aliens();
 
     return FALSE;
 }
