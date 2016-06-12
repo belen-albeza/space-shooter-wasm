@@ -14,7 +14,7 @@ These are instructions for Mac OS. In other UNIX environments, it should be simi
 4. Compile `main.c` with `gcc` and the flags from `sdl2-config`. Example:
 
 ```
-gcc main.c -I/usr/local/include -D_THREAD_SAFE -L/usr/local/lib -lSDL2 -lSDL2_Image -o main
+gcc main.c -I/usr/local/include -D_THREAD_SAFE -L/usr/local/lib -lSDL2 -lSDL2_Image -lSDL2_Mixer -o main
 ```
 
 ### Emscripten
@@ -40,12 +40,12 @@ For WebAssembly you need to add the `BINARYEN` flag and specify how you will be 
 
 ```
 cd src
-emcc main.c -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]' -s BINARYEN=1 -s 'BINARYEN_SCRIPTS="spidermonkify.py"' -o ../dist/index.html -O2 --preload-file assets
+emcc main.c -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_MIXER=2 -s SDL2_IMAGE_FORMATS='["png"]' -s BINARYEN=1 -s 'BINARYEN_SCRIPTS="spidermonkify.py"' -o ../dist/index.html -O2 --preload-file assets
 ```
 
 For asm.js: you don't need the `BINARYEN` flag:
 
 ```
-emcc main.c -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]' -o ../dist/index.html -O2 --preload-file assets
+emcc main.c -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s USE_SDL_MIXER=2 -s SDL2_IMAGE_FORMATS='["png"]' -o ../dist/index.html -O2 --preload-file assets
 ```
 

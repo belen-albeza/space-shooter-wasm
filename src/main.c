@@ -1,11 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <string.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 
 #if __EMSCRIPTEN__
-#include <emscripten.h>
+    #include <emscripten.h>
+    #include <SDL/SDL_mixer.h>
+#else
+    #include <SDL2/SDL_mixer.h>
 #endif
 
 #define MAX(a,b) ((a) > (b) ? a : b)
@@ -40,6 +44,12 @@ typedef enum {
     IMG_EXPLOSION,
     MAX_IMAGE_INDEX
 } ImageIndex;
+
+typedef enum {
+    SFX_BOOM,
+    SFX_SHOOT,
+    MAX_SFX_INDEX
+} SfxIndex;
 
 // =============================================================================
 // TYPE DEFS
@@ -87,6 +97,7 @@ SDL_Surface *g_screen = NULL;
 unsigned int g_last_timestamp = 0;
 
 SDL_Surface *g_images[MAX_IMAGE_INDEX] = {NULL};
+Mix_Chunk *g_sfx[MAX_SFX_INDEX] = {NULL};
 
 Ship g_ship;
 Bullet g_bullets[MAX_BULLETS];
@@ -117,7 +128,23 @@ SDL_Surface* load_image(char *filename) {
                 SDL_GetError());
         }
     }
+
+    // for BMP, mask transparent color 0xff00ff
+    if (strstr(filename, ".bmp") != NULL) {
+        Uint32 color_key = SDL_MapRGB(optimized->format, 0xFF, 0, 0xFF);
+        SDL_SetColorKey(optimized, SDL_TRUE, color_key);
+    }
+
     return optimized;
+}
+
+Mix_Chunk* load_sfx(char *filename) {
+    Mix_Chunk *sfx = Mix_LoadWAV(filename);
+    if (sfx == NULL) {
+        fprintf(stderr, "Unable to load sfx %s - %s", filename, SDL_GetError());
+    }
+
+    return sfx;
 }
 
 void draw_image(SDL_Surface *image, int x, int y) {
@@ -131,6 +158,10 @@ void draw_image_frame(SDL_Surface *image, int x, int y, int n_frames, int i) {
     SDL_Rect screen_rect = {x, y, frame_w, image->h};
     SDL_Rect image_rect = {i * frame_w, 0, frame_w, image->h};
     SDL_BlitSurface(image, &image_rect, g_screen, &screen_rect);
+}
+
+void play_sfx(Mix_Chunk *sfx) {
+    Mix_PlayChannel(-1, sfx, 0);
 }
 
 // =============================================================================
@@ -253,6 +284,7 @@ void update_ship(Ship *ship, const float delta, const Uint8 *keyboard) {
     // shoot
     if (!ship->wasSpaceDown && keyboard[SDL_SCANCODE_SPACE]) {
         shoot_bullet(ship->sprite.x, ship->sprite.y);
+        play_sfx(g_sfx[SFX_SHOOT]);
     }
 
     ship->wasSpaceDown = keyboard[SDL_SCANCODE_SPACE];
@@ -382,6 +414,8 @@ void collide_bullets_vs_aliens() {
 
             if (sprite_intersect(&(bullet->sprite), &(alien->sprite))) {
                 explode(alien->sprite.x, alien->sprite.y);
+                play_sfx(g_sfx[SFX_BOOM]);
+
                 alien->sprite.alive = FALSE;
                 bullet->sprite.alive = FALSE;
             }
@@ -396,10 +430,14 @@ void collide_bullets_vs_aliens() {
 void play_init() {
     // load assets
     g_images[IMG_BACKGROUND] = load_image("assets/images/background.png");
-    g_images[IMG_SHIP] = load_image("assets/images/captain.png");
+    // g_images[IMG_SHIP] = load_image("assets/images/captain.png");
+    g_images[IMG_SHIP] = load_image("assets/images/ship.bmp");
     g_images[IMG_BULLET] = load_image("assets/images/laser.png");
-    g_images[IMG_ALIEN] = load_image("assets/images/alien.png");
+    g_images[IMG_ALIEN] = load_image("assets/images/alien.bmp");
     g_images[IMG_EXPLOSION] = load_image("assets/images/explosion.png");
+
+    g_sfx[SFX_SHOOT] = load_sfx("assets/audio/shoot.wav");
+    g_sfx[SFX_BOOM] = load_sfx("assets/audio/explosion.wav");
 
     // init sprite lists
     for (unsigned int i = 0; i < MAX_BULLETS; i++) {
@@ -471,6 +509,14 @@ void play_cleanup() {
             g_images[i] = NULL;
         }
     }
+
+    // unload sfx
+    for (int i = 0; i < MAX_SFX_INDEX; i++) {
+        if (g_sfx[i] != NULL) {
+            Mix_FreeChunk(g_sfx[i]);
+            g_sfx[i] = NULL;
+        }
+    }
 }
 
 
@@ -479,10 +525,20 @@ void play_cleanup() {
 // =============================================================================
 
 bool startup(char *title) {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         return FALSE;
     }
     else {
+         // initi PNG loading
+        if (!(IMG_Init(IMG_INIT_PNG) & IMG_INIT_PNG)) {
+            fprintf(stderr, "SDL_image init error: %s\n", IMG_GetError());
+            return FALSE;
+        } // init SDL mixer
+        if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+            fprintf(stderr, "SDL_mixer init error %s\n", Mix_GetError());
+            return FALSE;
+        }
+
         g_window = SDL_CreateWindow(
             title,
             SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
